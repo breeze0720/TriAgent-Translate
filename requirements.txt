@@ -1,0 +1,22 @@
+# Multi-Agent Translation System Dependencies
+# pip install -r requirements.txt
+
+# LangChain (Agent + Workflow)
+langchain>=1.2.0
+langchain-openai
+langgraph
+
+# Web Framework
+fastapi
+uvicorn
+python-multipart
+
+# Environment Variables
+python-dotenv
+
+# MySQL Database
+pymysql
+
+# Document Parsing (for file upload translation)
+pypdf
+docx2txt
