@@ -5,11 +5,15 @@
 langchain>=1.2.0
 langchain-openai
 langgraph
+# 进程重启续跑依赖：SqliteSaver 把每个 superstep 的状态落盘
+langgraph-checkpoint-sqlite
 
 # Web Framework
 fastapi
 uvicorn
 python-multipart
+# SSE 进度流
+sse-starlette
 
 # Environment Variables
 python-dotenv
@@ -17,6 +21,10 @@ python-dotenv
 # MySQL Database
 pymysql
 
-# Document Parsing (for file upload translation)
+# Document Parsing / Export (for file upload translation + docx export)
 pypdf
 docx2txt
+python-docx
+
+# Tests
+pytest
