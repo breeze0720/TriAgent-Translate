@@ -2,7 +2,7 @@
 core/events.py - 进程内 SSE 事件总线
 
 为什么用「每任务一个 asyncio.Queue 列表」而不是 Redis pub/sub：
-单进程教学项目，最多几个并发任务；引入 Redis 只会多一个部署依赖。
+单进程部署，最多几个并发任务；引入 Redis 只会多一个部署依赖。
 关键点是线程安全：图执行在 ThreadPoolExecutor 的工作线程里，而 asyncio.Queue
 只能在事件循环线程里操作，所以 publish() 用 loop.call_soon_threadsafe 把
 put_nowait 投递回主循环。这是 FastAPI + 后台线程做 SSE 最容易踩的坑。

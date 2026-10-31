@@ -3,7 +3,7 @@ database.py - MySQL 连接池与数据访问层
 
 为什么不用 SQLAlchemy：
 本项目只有 3 张表、十几条 SQL，用 SQLAlchemy 会引入 ~20MB 依赖和 ORM 心智负担，
-收益（关系映射/迁移/多方言）在这个教学项目里为零。所以选择「自建轻量连接池 + 手写 SQL」：
+收益（关系映射/迁移/多方言）在这个规模下为零。所以选择「自建轻量连接池 + 手写 SQL」：
 - 池化解决旧版「每个函数 pymysql.connect() = 每次 TCP 握手」的压测瓶颈；
 - 取连接时 ping(reconnect=True)，等价于 SQLAlchemy 的 pool_pre_ping，
   治 MySQL 8 小时空闲断连这个经典坑；

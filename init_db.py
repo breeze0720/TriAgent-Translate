@@ -6,7 +6,7 @@ init_db.py - 初始化 / 迁移 MySQL 表结构
     python init_db.py --reset    # 先删掉三张业务表再重建（清空任务数据）
 
 设计说明：
-- 建表语句和 translate_agent.sql 保持同步，方便面试时直接在 Navicat 里演示；
+- 建表语句和 translate_agent.sql 保持同步，便于直接在数据库客户端里核对；
 - 除了 CREATE TABLE IF NOT EXISTS，还做一次「缺列补齐」：
   旧版本已经建过 tasks 表时，新增字段（如 stage/version/history_json）不会自动出现，
   迁移逻辑用 information_schema 检查后 ALTER TABLE，避免手工改库。

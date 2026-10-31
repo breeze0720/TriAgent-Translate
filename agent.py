@@ -1,7 +1,7 @@
 """
 agent.py - 四个专家节点背后的 LLM 能力
 
-与 v1 的差别（也是这次重构的核心教学点）：
+与 v1 的差别（这次重构的核心改动）：
 1. 审校不再「正则抠 JSON + 失败默认 50 分」，而是用 Pydantic 结构化输出（ReviewResult），
    解析连续失败会抛 ReviewUnavailableError，由节点标记 review_unavailable，
    交给 supervisor 按「重试一次 → 人工」处理，绝不静默污染评分数据；

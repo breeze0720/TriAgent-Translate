@@ -25,7 +25,7 @@ mysql -u root -p < translate_agent.sql
 python init_db.py
 
 # 2) 起服务（同时托管前端）
-D:\Anaconda\envs\xhu\python.exe main.py
+python main.py
 # 浏览器打开 http://127.0.0.1:8001/app/
 ```
 
@@ -120,7 +120,7 @@ MODEL_POLISH=glm:glm-4.6               # 长文改写，要语感 → 写作向
 │   ├── src/composables/    # useTheme / useNotifications / useTaskStream
 │   └── dist/               # 构建产物（后端托管用）
 ├── tests/                  # 66 个 pytest 用例（7 个文件）
-└── docs/讲解/              # 逐模块中文讲解（10 篇，含 3 个真实 bug 的前后对照）
+└── docs/design/            # 设计文档（10 篇，含 3 个真实 bug 的前后对照）
 ```
 
 ## 6. 主要端
