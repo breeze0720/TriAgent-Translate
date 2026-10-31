@@ -1,0 +1,144 @@
+# 09 · 文档上传：粘贴文本之外的第二种输入
+
+> 对应代码：`upload_utils.py`（四道防线的纯函数）、`main.py`（`_ingest_document` / `POST /api/tasks/upload` /
+> 兼容层 `/translate-file` / `/api/health` 下发的限制）、`upload_utils` 的 19 个用例在 `tests/test_upload.py`、
+> 前端 `frontend/src/components/CreateTaskModal.vue` + `api/client.js`（`createTaskFromFile`）
+
+## 1. 实现概览
+
+一句话：**上传的 PDF / Word / Markdown / TXT 先被抽成纯文本，之后的流程和"粘贴一段文本"完全相同——同一个 `source_text`、同一条 LangGraph 流水线、同一套落库与 SSE。**
+
+```
+浏览器                 FastAPI                         后台线程池
+──────                 ───────                         ─────────
+选文件 ──multipart──▶  /api/tasks/upload
+                        ├─ 四道防线（upload_utils）
+                        ├─ 落盘 uploads/<hash8>_<name>
+                        ├─ document_loader 抽文本
+                        └─ database.create_task(source_text=…)
+                                 └──▶ execute_task(task_id) ──▶ LangGraph 七节点
+```
+
+关键点是**上传不是一条新链路，只是"输入形态"多了一种**。所以术语表、审校、人工审核、断点续跑、导出全部自动生效，一行都不用改。
+
+### 1.1 后端：一个编排函数，两个入口共用
+
+```python
+# main.py
+def _ingest_document(filename: str, content: bytes) -> tuple[str | None, str | None, int]:
+    """上传文档 → 纯文本。返回 (text, 错误文案, HTTP 状态)。"""
+    ext = Path((filename or "").replace("\\", "/")).suffix.lower()
+
+    reason = upload_utils.check_extension(filename)      # ① 白名单
+    if reason: return None, reason, 400
+    if not content: return None, "文件内容为空（0 字节），请确认文件没有损坏", 400
+    reason = upload_utils.check_size(len(content))       # ② 体积（按实际字节）
+    if reason: return None, reason, 413
+    reason = upload_utils.zip_bomb_reason(content, ext)  # ③ docx 是 zip
+    if reason: return None, reason, 400
+
+    save_path = UPLOAD_DIR / upload_utils.stored_filename(upload_utils.content_sha256(content), filename)
+    save_path.write_bytes(content)
+    try:
+        text = extract_text(str(save_path))              # ④ 真解析
+    except Exception as exc:
+        _discard_upload(save_path)                       # 解析失败的文件是垃圾，删掉
+        return None, f"文档解析失败：{exc}", 400
+    reason = upload_utils.check_extracted_text(text)     # ⑤ 空文本 / 超长
+    if reason:
+        _discard_upload(save_path)
+        return None, reason, 400
+    return text.strip(), None, 200
+```
+
+`POST /api/tasks/upload` 拿它的返回值建任务；旧接口 `POST /translate-file` 也调它，只是返回体不同。**两条入口一套校验**，不会出现"新接口拦住了、老接口绕过去"。
+
+### 1.2 五道校验，顺序就是成本从低到高
+
+| # | 防线 | 函数 | 拒绝时 |
+|---|---|---|---|
+| ① | 扩展名白名单 `.pdf/.docx/.md/.txt` | `check_extension` | 400 `不支持的文件格式「.xlsx」，仅支持 .pdf、.docx、.md、.txt` |
+| ② | 体积 ≤ 20 MB（`MAX_UPLOAD_MB`） | `check_size` | 413 `文件过大：21.0 MB，超过上限 20 MB` |
+| ③ | zip 炸弹（docx 本质是 zip） | `zip_bomb_reason` | 400 `压缩比异常（约 1200:1 > 100:1），疑似 zip 炸弹，已拒绝` |
+| ④ | 解析（pypdf / docx2txt） | `document_loader.extract_text` | 400 `文档解析失败：File is not a zip file` |
+| ⑤ | 抽取结果非空且 ≤ 20000 字符 | `check_extracted_text` | 400 `文档中没有可提取的文字：可能是扫描版/图片版 PDF…` |
+
+③ 的实现细节值得记：**只读 zip 中央目录里声明的 `file_size`，不解压**。所以检查一个"解压后 10 GB"的炸弹是毫秒级的，不会先把自己撑爆。
+
+### 1.3 前端：限制不写死在 JS 里
+
+`/api/health` 现在多返回一段：
+
+```json
+{"upload": {"formats": [".pdf", ".docx", ".md", ".txt"], "max_mb": 20, "max_chars": 20000}}
+```
+
+前端把它存进 `uploadInfo`，再作为 `limits` 传给弹层：上传区显示"支持 PDF / DOCX / MD / TXT，单文件 ≤ 20 MB"、`<input type="file" accept=".pdf,.docx,.md,.txt">` 都由这份数据渲染。改后端 `.env` 里的 `MAX_UPLOAD_MB`，前端提示跟着变，不用重新改代码。
+
+提交时走 multipart，客户端**不能手写 `Content-Type`**：
+
+```js
+// frontend/src/api/client.js
+createTaskFromFile(file, payload) {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('source_lang', payload.source_lang)
+    // …其余参数
+    return request('/api/tasks/upload', { method: 'POST', multipart: body })  // 不设 Content-Type
+}
+```
+
+一旦手动写 `Content-Type: multipart/form-data`，浏览器就不会替你补 `boundary`，后端解析直接失败——这是文件上传最常见的"代码看起来对但一直 400"。
+
+## 2. 设计取舍与备选方案
+
+**错写法 1：给 `/api/tasks` 加一个可选 `file` 参数。**
+
+`/api/tasks` 现在吃 `application/x-www-form-urlencoded`。只要函数签名里出现 `File(...)`，FastAPI 就按 multipart 解析，老前端/老脚本的请求体会直接 422。
+
+正解是两个端点各自干净：文本走 `/api/tasks`，文件走 `/api/tasks/upload`。多写一个路由，少一类兼容性问题。
+
+**错写法 2：只用 `UploadFile.size` 预检，不校验实际字节。**
+
+声明大小是客户端给的，可以撒谎；分块传输时甚至拿不到。所以是"预检 + 落盘后按 `len(content)` 再判一次"，两道都过才收。
+
+**错写法 3：解析失败 `return 500`。**
+
+文件损坏、加了密码、根本不是 zip，全是**用户输入问题**。返 500 会让前端弹"服务器出错"，用户不知道该换文件还是该找管理员。返 400 + 具体原因，用户才有下一步。
+
+**错写法 4：抽不出文字也照样建任务。**
+
+扫描版 PDF 没有文字层，`pypdf` 抽出来是空串。如果不管它，会建出一条 `source_text=""` 的脏任务：4 个节点空跑、白烧 API 额度、时间线上还是一条"成功"记录。第 ⑤ 道防线就是为了让它**在创建任务之前**就变成一句人话。
+
+> 附带收益：解析失败和抽不出文本的原始文件会被 `_discard_upload` 删掉，`uploads/` 不会变成问题文件回收站。
+
+## 3. 常见问题（FAQ）
+
+**Q1：文件上传你防了哪些攻击面？**
+
+按成本从低到高讲五道：扩展名白名单（连文件都不读）→ 体积上限（预检 + 实际字节）→ zip 炸弹（只读中央目录的 `file_size`，不解压）→ 解析异常转 400 → 抽取结果校验。再补一句定位：这些判断全抽在 `upload_utils.py` 里做成纯函数，19 个 pytest 用例覆盖 0 字节、伪造扩展名、1000:1 压缩比、损坏 docx，不用起服务就能跑。
+
+**Q2：为什么只支持 4 种格式？项目一支持 7 种。**
+
+因为翻译场景只说得通这 4 种。`.xlsx/.pptx/.csv` 抽取后会丢掉表格行列和幻灯片版式，翻出来是乱序段落——"做了但没做好"比不做更容易被追问到崩。项目一支持 7 种是因为 RAG 检索只要文字，丢结构影响小；两个项目的输入用途不同，取舍就该不同。
+
+**Q3：扫描版 PDF 怎么办？**
+
+现在的答案是**明确不支持，并给出可读原因**：`pypdf` 只能抽文字层，纯图片 PDF 抽不到。要支持就得接 OCR（PaddleOCR / 云上 OCR），那是另一个量级的工作，处理方式是写入已知限制，而不是声称支持。
+
+**Q4：上传的文件存在哪？为什么不入库？**
+
+落 `uploads/<内容哈希前8位>_<文件名>`，只把**抽取后的文本**写进 `tasks.source_text`。这样翻译链路完全不依赖原始文件，任务可以脱离文件继续跑/恢复；文件本身留着只是为了复盘"这次翻译到底吃的什么内容"。内容哈希做前缀，同名文件不互相覆盖。
+
+## 附：实测（本机真实调用）
+
+| 用例 | 输入 | 结果 |
+|---|---|---|
+| PDF 成功 | `客户案例集.pdf`，2 页，抽出 847 字符 | 任务 #12：4 段、20 术语、审校 90.0（5 条问题）、retry=1、polish → done |
+| Word 成功 | `员工手册.docx`，抽出 1229 字符 | 任务 #13：17 段、20 术语、审校 89.15（7 条问题）、retry=1、polish → done |
+| 格式不符 | `.xlsx` | 400 `不支持的文件格式「.xlsx」，仅支持 .pdf、.docx、.md、.txt` |
+| 空文件 | 0 字节 `.txt` | 400 `文件内容为空（0 字节）…` |
+| 伪造 docx | 256 字节随机数据 | 400 `文档解析失败：File is not a zip file` |
+| 超体积 | 21 MB `.txt` | 413 `文件过大：21.0 MB，超过上限 20 MB` |
+
+两次成功用例的时间线第一行都是"原文切分为 N 段，进入术语抽取；模型分工：术语=glm-4-flash · 翻译=deepseek-chat · 审校=qwen3.7-max · 润色=glm-4.6"——**和粘贴文本的任务完全同一条流水线**，这就是"上传只是多一种输入"的直接证据。
