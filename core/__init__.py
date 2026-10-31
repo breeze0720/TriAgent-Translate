@@ -1,0 +1,1 @@
+"""core 包：checkpointer、SSE 事件总线、后台执行器。"""
