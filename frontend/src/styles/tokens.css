@@ -1,0 +1,114 @@
+/* ============================================================
+   设计变量：中性色 + 单一强调色，亮/暗两套值
+   暗色生效条件：系统偏好暗色（且用户未手动选亮色），或手动 [data-theme="dark"]
+   ============================================================ */
+:root {
+    color-scheme: light;
+
+    /* 表面与描边 */
+    --bg: #fafafa;
+    --panel: #ffffff;
+    --panel-2: #f4f4f5;
+    --panel-3: #efeff1;
+    --border: #e7e7e9;
+    --border-strong: #d6d6db;
+
+    /* 文字 */
+    --text: #18181b;
+    --text-2: #3f3f46;
+    --muted: #71717a;
+    --faint: #a1a1aa;
+
+    /* 强调色与语义色（低饱和） */
+    --accent: #2f6feb;
+    --accent-hover: #2862d2;
+    --accent-soft: #eef3fe;
+    --accent-border: #cfe0fb;
+    --accent-ring: rgba(47, 111, 235, 0.14);
+
+    --ok: #3f8f5f;
+    --ok-soft: #eaf4ee;
+    --ok-border: #cfe5d8;
+
+    --warn: #a97a1f;
+    --warn-soft: #f8f1e0;
+    --warn-border: #eadfbf;
+
+    --danger: #b4453f;
+    --danger-soft: #fbeeed;
+    --danger-border: #eed3d1;
+
+    /* 形状与排版 */
+    --radius: 8px;
+    --radius-sm: 6px;
+    --radius-lg: 12px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "Cascadia Code", "JetBrains Mono", Consolas,
+        "Liberation Mono", monospace;
+    --dur: 150ms;
+    --dur-slow: 180ms;
+    --shadow: 0 1px 2px rgba(24, 24, 27, 0.04);
+}
+
+/* 暗色：跟随系统 */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+        --bg: #0c0c0e;
+        --panel: #131316;
+        --panel-2: #1a1a1e;
+        --panel-3: #212126;
+        --border: #26262b;
+        --border-strong: #35353c;
+        --text: #ececee;
+        --text-2: #c8c8cd;
+        --muted: #96969e;
+        --faint: #6d6d75;
+        --accent: #6e9bf5;
+        --accent-hover: #86acf8;
+        --accent-soft: #17243c;
+        --accent-border: #26395c;
+        --accent-ring: rgba(110, 155, 245, 0.18);
+        --ok: #6fbd8c;
+        --ok-soft: #14251a;
+        --ok-border: #24402d;
+        --warn: #d0a952;
+        --warn-soft: #2a2214;
+        --warn-border: #453820;
+        --danger: #e0837c;
+        --danger-soft: #2c1816;
+        --danger-border: #4a2724;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+}
+
+/* 暗色：手动切换 */
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0c0c0e;
+    --panel: #131316;
+    --panel-2: #1a1a1e;
+    --panel-3: #212126;
+    --border: #26262b;
+    --border-strong: #35353c;
+    --text: #ececee;
+    --text-2: #c8c8cd;
+    --muted: #96969e;
+    --faint: #6d6d75;
+    --accent: #6e9bf5;
+    --accent-hover: #86acf8;
+    --accent-soft: #17243c;
+    --accent-border: #26395c;
+    --accent-ring: rgba(110, 155, 245, 0.18);
+    --ok: #6fbd8c;
+    --ok-soft: #14251a;
+    --ok-border: #24402d;
+    --warn: #d0a952;
+    --warn-soft: #2a2214;
+    --warn-border: #453820;
+    --danger: #e0837c;
+    --danger-soft: #2c1816;
+    --danger-border: #4a2724;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}

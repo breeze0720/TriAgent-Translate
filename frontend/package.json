@@ -1,7 +1,8 @@
 {
-  "name": "translate-agent-frontend",
-  "version": "1.0.0",
-  "description": "多智能体协作翻译与审校系统 - 前端",
+  "name": "translate-agent-workbench",
+  "version": "2.0.0",
+  "private": true,
+  "description": "多智能体协作翻译与审校系统 - 三栏工作台前端（Vue 3 + Vite，原生 CSS）",
   "type": "module",
   "scripts": {
     "dev": "vite",
